@@ -12,13 +12,20 @@
 #include "semphr.h"
 #include "SEGGER_SYSVIEW.h"
 
+volatile u8 DEBUG;
+
 void PWRInit(void);
+void CabinPosInit(void);
+void led_mode_shuffle(void);
+void ADC_Cal(void);
+void Flash_Backup(void);
 void InitGlobalSet(void);
 #define PWRSwitch 			PBout(2)
 
 GlobalSet gGlobal;
 
 BaseType_t errcode;
+
 
 EventGroupHandle_t EventGroupHandle; 
 SemaphoreHandle_t BinarySemaphore_USART;
@@ -51,6 +58,12 @@ void monitor_task(void * pvParameters);
 #define MSG_TASK_SIZE 128
 TaskHandle_t MsgTask_Handler;
 void message_task(void * pvParameters);
+
+/* LED control*/
+#define LED_TASK_PRIO 1
+#define LED_STK_SIZE 128
+TaskHandle_t LedTask_Handler;
+void led_task(void * pvParameters);
 
 /* Door task */
 #define DOOR_TASK_PRIO 5
@@ -128,6 +141,13 @@ int main(void)
 	InitGlobalSet();
 	gGlobal.m_MOTORUpper.threshold = 500;
 	gGlobal.m_MOTORLower.threshold = 500;
+//	gGlobal.m_MOTORUpper.status = RUNNING;
+//	DoorSingleMode_Running(CLOCKWISE, 800,1);
+	UPPERMOTORBRAKE;
+	LOWERMOTORBRAKE;
+	LOCKERSTANDBY;
+	delay_xms(1000);
+	
 	xTaskCreate((TaskFunction_t )start_task,            
 							(const char*    )"start_task",         
 							(uint16_t       )START_STK_SIZE,        
@@ -222,6 +242,13 @@ void start_task(void * pvParameters)
 														(void *					) NULL,
 														(UBaseType_t		) FAULTPROC_TASK_PRIO,
 														(TaskHandle_t *	) &MonitorTask_Handler ) ;
+
+							xTaskCreate(	(TaskFunction_t	) led_task,
+														(const char *		) "led_task",
+														(uint16_t				)	LED_STK_SIZE,
+														(void *					) NULL,
+														(UBaseType_t		) LED_TASK_PRIO,
+														(TaskHandle_t *	) &LedTask_Handler ) ;
 														
 							FaultProcTimer_Handle = xTimerCreate( (const char *) "FaultProcTimer",
 																										(TickType_t) 100,
@@ -237,6 +264,7 @@ void start_task(void * pvParameters)
 														
 	vTaskDelete(StartTask_Handler);
 	TIM_Cmd(TIM4, ENABLE);  // start the ADC;
+//	CabinPosInit();
 	taskEXIT_CRITICAL();
 }
 
@@ -250,18 +278,37 @@ void FaultProcTimerCallBack(TimerHandle_t xTimer)
 		if(gGlobal.m_Status.Upperdoor_OCPFLAG ==1)
 		{
 			gGlobal.m_MOTORUpper.status = RUNNING;
-			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_10,1);
+			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_35,1);
 			
 		}
 		else if (gGlobal.m_Status.Lowerdoor_OCPFLAG == 1)
 		{
 			gGlobal.m_MOTORLower.status = RUNNING;
-			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_10,2);
+			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_35,2);
 			
 		}
 	
 }
 
+
+void led_task(void *pvParameters)
+{
+	if(EventGroupHandle != NULL)
+	{
+		xEventGroupWaitBits(	(EventGroupHandle_t)	EventGroupHandle,
+													(EventBits_t			 )	LED_EVENTBIT,
+													(BaseType_t 			 )	pdTRUE,
+													(BaseType_t 			 )	pdFALSE,
+													(TickType_t 			 )	portMAX_DELAY );
+		led_mode_shuffle();
+		
+	}
+	else
+	{
+		vTaskDelay(10);
+	}
+
+}
 
 void faultproc_task(void * pvParameters)
 {
@@ -285,11 +332,21 @@ void faultproc_task(void * pvParameters)
 
 }
 
+/*
+1. monitor the operation of doors/lockers/lifter
+2. monitor the operation of LEDs
+3. monitor the touch signal
+*/
 void monitor_task(void * pvParameters)
 {
 	while(1)
 	{
 		MotorProcessMonitoring();
+		if(gGlobal.m_BackupEnable == 1)
+		{
+			Flash_Backup();
+			gGlobal.m_BackupEnable = 0;
+		}			
 		vTaskDelay(200);	
 	}
 }
@@ -325,6 +382,7 @@ void door_task(void * pvParameters)
 														(BaseType_t				 ) 	pdTRUE,
 														(BaseType_t				 ) 	pdFALSE,
 														(TickType_t				 ) 	portMAX_DELAY );		
+			gGlobal.m_stack.door_timetostart = gGlobal.m_LocalTime;
 			DoorEnable_Config();
 		}
 		else
@@ -375,6 +433,8 @@ void message_task(void * pvParameters)
 		else if (gGlobal.m_Status.Upperdoor_OCPFLAG == 0xEE || gGlobal.m_Status.Lowerdoor_OCPFLAG == 0xEE)
 			gGlobal.m_CAN.door_msg_result= 6;
 		AppResultRes(CMD_LOCKER_DOOR,gGlobal.m_CAN.door_msg_result , err, 4);
+		if(gGlobal.m_CAN.door_msg_result == 1 && DEBUG == 3)
+			printf("Time_Duration:the door operation is %d ms\r\n",gGlobal.m_stack.door_interval);
 		gGlobal.m_CAN.door_msg_result = 0;
 		gGlobal.m_CAN.door_ready = 0;
 		gGlobal.m_stack.operationID =0 ;
@@ -435,7 +495,7 @@ void message_task(void * pvParameters)
 		gGlobal.m_stack.operationAccTimeforLifter =0;
 		gGlobal.m_MOTORLifter.status = BRAKE;
 		err[0] = gGlobal.m_MOTORLifter.err_flag ;
-		AppResultRes(CMD_LOCKER_DOOR,gGlobal.m_CAN.lifter_msg_result , err, 1);
+		AppResultRes(CMD_MOTOR_LIFTER,gGlobal.m_CAN.lifter_msg_result , err, 1);
 		gGlobal.m_CAN.lifter_ready = 0;
 		gGlobal.m_CAN.lifter_msg_result = 0;
 		gGlobal.m_stack.operationDoorAcc.stepper_pulse_cnt =0;
@@ -500,7 +560,6 @@ void locker_task(void * pvParameters)
 	
 	
 	}
-
 }
 
 void adc_processing_task(void * pvParameters)
@@ -511,6 +570,13 @@ void adc_processing_task(void * pvParameters)
 		{
 			errcode = pdFALSE;
 			errcode = xSemaphoreTake(BinarySemaphore_ADCDATA, portMAX_DELAY);
+			if(gGlobal.m_OCPData.cal_enable == 1)
+			{
+				gGlobal.m_OCPData.cal_enable = 0;
+				taskENTER_CRITICAL();
+				ADC_Cal();
+				taskEXIT_CRITICAL();
+			}
 			if (errcode == pdTRUE){
 				FetchingCurrentValue();
 				num ++;
@@ -550,9 +616,90 @@ void usart_decode_task(void *pvParameters)
 		}
 	
 	}
-
-
 }
+
+void Flash_Backup(void)
+{
+	uint8_t * data;
+	uint16_t ProgramCnt;
+	FLASH_Status ErasePageStatus;
+	data = malloc(sizeof(u8)*1024);
+	if (data == NULL)
+		printf("memory: fail to create the section for data\r\n");
+	memcpy(data, (uint32_t *)0x8038000, 0x400);
+	if(gGlobal.m_BackupEnable == 1)
+	{
+		*(data+8) = (u8) (gGlobal.m_UpperDoorThreshold)&0xFF;
+		*(data+9) = (u8) (gGlobal.m_UpperDoorThreshold>>8)&0xFF;
+		*(data+10) = (u8) gGlobal.m_LowerDoorThreshold & 0xFF;
+		*(data+11) = (u8) (gGlobal.m_LowerDoorThreshold>>8)&0xFF;
+	
+	}
+	
+	FLASH_If_Init();
+	ErasePageStatus = FLASH_COMPLETE;
+	ProgramCnt = 0;
+  FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+	ErasePageStatus = FLASH_ErasePage(0x08038000);
+	if(ErasePageStatus == FLASH_COMPLETE)
+	{
+		for(ProgramCnt=0; ProgramCnt <= 1020;)
+		{
+			ErasePageStatus = FLASH_ProgramWord((0x08038000+ProgramCnt), *(uint32_t *)(data+ProgramCnt));
+			while(ErasePageStatus != FLASH_COMPLETE);
+			ProgramCnt += 4;
+		}
+	}
+	FLASH_Lock();
+	free(data);
+}
+
+/*
+0x8038000~ 0x8038007 store the adc offset values
+*/
+
+void ADC_Cal(void)
+{
+	uint8_t * data;
+	uint16_t ProgramCnt;
+	FLASH_Status ErasePageStatus;
+	data = malloc(sizeof(u8)*1024);
+	if (data == NULL)
+		printf("memory: fail to create the section for data\r\n");
+	memcpy(data, (uint32_t *)0x8038000, 0x400);
+	gGlobal.m_OCPData.adc_offset[0] = gGlobal.m_OCPData.rawdata[1];
+	gGlobal.m_OCPData.adc_offset[1] = gGlobal.m_OCPData.rawdata[2];
+	gGlobal.m_OCPData.adc_offset[2] = gGlobal.m_OCPData.rawdata[3];
+	gGlobal.m_OCPData.adc_offset[3] = gGlobal.m_OCPData.rawdata[4];
+	
+	*data = (u8)gGlobal.m_OCPData.adc_offset[0] & 0xFF;
+	*(data+1) = (u8)(gGlobal.m_OCPData.adc_offset[0]>>8) & 0xFF;
+	*(data+2) = (u8)(gGlobal.m_OCPData.adc_offset[1]>>0) & 0xFF;
+	*(data+3) = (u8)(gGlobal.m_OCPData.adc_offset[1]>>8) & 0xFF;
+	*(data+4) = (u8)(gGlobal.m_OCPData.adc_offset[2]>>0) & 0xFF;
+	*(data+5) = (u8)(gGlobal.m_OCPData.adc_offset[2]>>8) & 0xFF;
+	*(data+6) = (u8)(gGlobal.m_OCPData.adc_offset[3]>>0) & 0xFF;
+	*(data+7) = (u8)(gGlobal.m_OCPData.adc_offset[3]>>8) & 0xFF;
+	
+	FLASH_If_Init();
+	ErasePageStatus = FLASH_COMPLETE;
+	ProgramCnt = 0;
+  FLASH_ClearFlag(FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+	ErasePageStatus = FLASH_ErasePage(0x08038000);
+	if(ErasePageStatus == FLASH_COMPLETE)
+	{
+		for(ProgramCnt=0; ProgramCnt <= 1020;)
+		{
+			ErasePageStatus = FLASH_ProgramWord((0x08038000+ProgramCnt), *(uint32_t *)(data+ProgramCnt));
+			while(ErasePageStatus != FLASH_COMPLETE);
+			ProgramCnt += 4;
+		}
+	}
+	FLASH_Lock();
+	free(data);
+}
+
+
 void PWRInit(void)
 {
 		GPIO_InitTypeDef  GPIO_InitStructure;
@@ -562,6 +709,120 @@ void PWRInit(void)
 		GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 		GPIO_Init(GPIOB, &GPIO_InitStructure);	
 		PWRSwitch = 0;
+}
+
+void CabinPosInit(void)
+{
+	if(UPPERDOOR_CLOSE_IN != 1)
+	{
+		if(UPPERLOCKER_RELEASED_IN != 1)
+			LockerRelease_Config(ID_01);
+		if(gGlobal.m_LOCKERUpper.err_flag == 0)
+		{
+			gGlobal.m_MOTORUpper.status = RUNNING;
+			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_5,1);
+			while(UPPERDOOR_CLOSE_IN) ;
+			DoorSingleMode_Running(BRAKE,PWM_DUTYFACTOR_10,1);
+			LockerRelease_Config(ID_01);
+		}
+		else if (DEBUG == 1)
+			printf("Error: fail to initialize the upper door");
+	}
+	if(LOWERDOOR_CLOSE_IN != 1)
+	{
+		if(LOWERLOCKER_RELEASED_IN != 1)
+			LockerRelease_Config(ID_02);
+		if(gGlobal.m_LOCKERLower.err_flag == 0)
+		{
+			gGlobal.m_MOTORLower.status = RUNNING;
+			DoorSingleMode_Running(gGlobal.m_stack.operationDIR,PWM_DUTYFACTOR_5,2);
+			while(LOWERDOOR_CLOSE_IN) ;
+			DoorSingleMode_Running(BRAKE,PWM_DUTYFACTOR_10,2);
+			LockerRelease_Config(ID_02);
+		}
+		else if (DEBUG == 1)
+			printf("Error: fail to initialize the lower door");
+	}	
+}
+
+void LED_Init(void)
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+	TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+	
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+	GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8;			
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);		
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM8 , ENABLE);
+  TIM_TimeBaseStructure.TIM_Period  = 1000 * PWM_FREQ;//
+  TIM_TimeBaseStructure.TIM_Prescaler = (SystemCoreClock/1000000)-1;
+  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+  TIM_TimeBaseStructure.TIM_CounterMode =  TIM_CounterMode_Up;
+  TIM_TimeBaseInit(TIM8, &TIM_TimeBaseStructure);
+
+	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+	TIM_OCInitStructure.TIM_Pulse = PWM_DUTYFACTOR_20;
+	TIM_OC1Init(TIM8, &TIM_OCInitStructure);
+	TIM_OC2Init(TIM8, &TIM_OCInitStructure);
+	TIM_OC3Init(TIM8, &TIM_OCInitStructure);
+	TIM_OC4Init(TIM8, &TIM_OCInitStructure);
+	TIM_OC1PreloadConfig(TIM8, TIM_OCPreload_Enable);
+	TIM_OC2PreloadConfig(TIM8, TIM_OCPreload_Enable);
+	TIM_OC3PreloadConfig(TIM8, TIM_OCPreload_Enable);
+	TIM_OC4PreloadConfig(TIM8, TIM_OCPreload_Enable);
+	TIM_CtrlPWMOutputs(TIM8,ENABLE);
+	TIM_ARRPreloadConfig(TIM8, ENABLE);
+	TIM_Cmd(TIM8, DISABLE);	
+}
+
+void led_mode_shuffle(void)
+{
+	switch(gGlobal.m_LED.ID)
+	{
+		case 1:  // inner upper cabin
+			if(gGlobal.m_LED.mode == 1)
+				InnerLED_UP_ON;
+			else if(gGlobal.m_LED.mode == 2)
+				InnerLED_UP_OFF;
+			
+			gGlobal.m_LED.mode = 0;
+				
+			break;
+
+		case 2:	// inner lower cabin
+			if(gGlobal.m_LED.mode == 1)
+				InnerLED_DOWN_ON;
+			else if(gGlobal.m_LED.mode == 2)
+				InnerLED_DOWN_OFF;
+			
+			gGlobal.m_LED.mode = 0;
+			break;
+
+		case 3: // both innter cabins
+			if(gGlobal.m_LED.mode == 1)
+			{
+				InnerLED_UP_ON;
+				InnerLED_DOWN_ON;
+				}
+			else if(gGlobal.m_LED.mode == 2)
+			{
+				InnerLED_UP_OFF;
+				InnerLED_DOWN_OFF;
+				}
+			break;
+
+		default:
+		break;
+		
+
+	}
+
 }
 
 void InitGlobalSet(void)
@@ -603,8 +864,42 @@ void InitGlobalSet(void)
     {
         gGlobal.m_DeviceInfo.serial_number[i] = sys_serial_number[i];
     }
+		i = *(uint32_t *)0x8038000;
+		j = *(uint32_t *)0x8038001;
+		if((i == 0xFF) || j == 0xFF)
+			gGlobal.m_OCPData.cal_enable = 1 ;
+		else
+		{
+			gGlobal.m_OCPData.adc_offset[0] = (*(uint32_t *)0x8038001)<<8| (*(uint32_t *)0x8038000);
+			gGlobal.m_OCPData.adc_offset[1] = (*(uint32_t *)0x8038003)<<8| (*(uint32_t *)0x8038002);
+			gGlobal.m_OCPData.adc_offset[2] = (*(uint32_t *)0x8038005)<<8| (*(uint32_t *)0x8038004);
+			gGlobal.m_OCPData.adc_offset[3] = (*(uint32_t *)0x8038007)<<8| (*(uint32_t *)0x8038006);
+		}
+		
+		gGlobal.m_BackupEnable =0;
+		/*
+		   0x8038008 ~  0x803800B store the threshold value of door protection
+		*/
+		i= *(uint32_t *) 0x8038008;
+		j= *(uint32_t *) 0x803800A;
+		if((i == 0xFF) || j == 0xFF)
+		{
+			gGlobal.m_UpperDoorThreshold = 500;
+			gGlobal.m_LowerDoorThreshold = 500;
+			gGlobal.m_BackupEnable = 1;
+		}
+			
+		else
+		{
+			gGlobal.m_UpperDoorThreshold = (*(uint32_t *)0x8038009)<<8| (*(uint32_t *)0x8038008);
+			gGlobal.m_LowerDoorThreshold = (*(uint32_t *)0x803800B)<<8| (*(uint32_t *)0x803800A);
+			gGlobal.m_OCPData.adc_offset[2] = (*(uint32_t *)0x8038005)<<8| (*(uint32_t *)0x8038004);
+			gGlobal.m_OCPData.adc_offset[3] = (*(uint32_t *)0x8038007)<<8| (*(uint32_t *)0x8038006);
+		}		
+		
 }
 
+/* upper motor over current detector */
 void OCP0_IRQHandler(void)
 {
 	if (EXTI_GetFlagStatus(MOTORUPPER_INT_EXTI_LINE) == SET)
@@ -615,7 +910,8 @@ void OCP0_IRQHandler(void)
 		{
 			DoorSingleMode_Running(BRAKE, 0,1) ;
 			gGlobal.m_Status.Upperdoor_OCPFLAG = 1;
-			printf("Upperdoor OCP is triggerred\r\n");
+			if(DEBUG == 3)
+				printf("Upperdoor OCP is triggerred\r\n");
 		}
 	}
 }
