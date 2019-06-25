@@ -197,6 +197,11 @@ void MotorProcessMonitoring(void)
 		{
 			/*  */
 			gGlobal.m_CAN.door_msg_result = 1;
+			 
+			if(gGlobal.m_LocalTime < gGlobal.m_stack.door_timetostart)
+				gGlobal.m_stack.door_interval =0xFFFFFFFF + gGlobal.m_LocalTime - gGlobal.m_stack.door_timetostart;
+			else
+				gGlobal.m_stack.door_interval = gGlobal.m_LocalTime - gGlobal.m_stack.door_timetostart;
 			if (gGlobal.m_stack.operationID == 1)
 			{
 				gGlobal.m_MOTORUpper.err_flag =0;
@@ -224,6 +229,12 @@ void MotorProcessMonitoring(void)
 				gGlobal.m_MOTORUpper.err_flag =0;
 				gGlobal.m_MOTORLower.err_flag =0;
 				gGlobal.m_CAN.door_msg_result = 1;
+				
+				if(gGlobal.m_LocalTime < gGlobal.m_stack.door_timetostart)
+					gGlobal.m_stack.door_interval =0xFFFFFFFF + gGlobal.m_LocalTime - gGlobal.m_stack.door_timetostart;
+				else
+					gGlobal.m_stack.door_interval = gGlobal.m_LocalTime - gGlobal.m_stack.door_timetostart;
+
 				if (UPPERDOOR_CLOSE_IN)
 				{
 					/* code */
@@ -373,7 +384,7 @@ void MotorFaultMonitoring(void)
 				fDIR = COUNTERCLOCKWISE;
 		else if (gGlobal.m_stack.operationDIR == COUNTERCLOCKWISE)
 				fDIR = CLOCKWISE;
-		fPWM = 2*PWM_DUTYFACTOR_1;
+		fPWM = PWM_DUTYFACTOR_20;
 		TIM_ITConfig(TIM1,TIM_IT_CC1,DISABLE ); 
 		gGlobal.m_MOTORUpper.status = RUNNING;
 		DoorSingleMode_Running(fDIR,fPWM ,1);
@@ -418,7 +429,7 @@ void MotorFaultMonitoring(void)
 				fDIR = COUNTERCLOCKWISE;
 		else if (gGlobal.m_stack.operationDIR == COUNTERCLOCKWISE)
 				fDIR = CLOCKWISE;
-		fPWM = 2*PWM_DUTYFACTOR_1;
+		fPWM = PWM_DUTYFACTOR_20;
 		TIM_ITConfig(TIM1,TIM_IT_CC1,DISABLE ); 
 		gGlobal.m_MOTORLower.status = RUNNING;
 		DoorSingleMode_Running(fDIR,fPWM ,2);
@@ -522,7 +533,7 @@ void Motor_CTRL_Init(void)
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-	TIM_OCInitStructure.TIM_Pulse = 100;
+	TIM_OCInitStructure.TIM_Pulse = 0;
 	TIM_OC1Init(TIM3, &TIM_OCInitStructure);
 	TIM_OC2Init(TIM3, &TIM_OCInitStructure);
 	TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
@@ -559,8 +570,8 @@ void Motor_CTRL_Init(void)
 
 	/* Configure TIM5 for both Upper/Lower motors  */
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5 , ENABLE);
-  TIM_TimeBaseStructure.TIM_Period  = TIM3_PERIOD_CNT;//
-  TIM_TimeBaseStructure.TIM_Prescaler = (SystemCoreClock/TIM3_TICK_HZ)-1;
+  TIM_TimeBaseStructure.TIM_Period  = 1000;//
+  TIM_TimeBaseStructure.TIM_Prescaler = (SystemCoreClock/1000000)-1;
   TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
   TIM_TimeBaseStructure.TIM_CounterMode =  TIM_CounterMode_Up;
   TIM_TimeBaseInit(TIM5, &TIM_TimeBaseStructure);
@@ -568,7 +579,7 @@ void Motor_CTRL_Init(void)
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-	TIM_OCInitStructure.TIM_Pulse = DUTYCYCLE;
+	TIM_OCInitStructure.TIM_Pulse = 0;
 	
 	TIM_OC1Init(TIM5, &TIM_OCInitStructure);
 	TIM_OC2Init(TIM5, &TIM_OCInitStructure);
@@ -723,7 +734,7 @@ void DoorEnable_Config(void)
 					|| gGlobal.m_LOCKERUpper.err_flag !=0 || gGlobal.m_CAN.operation_mode == 0)  
 				{
 					/* fail to pass the state check for upper door */
-					gGlobal.m_CAN.door_msg_result = 1;
+					gGlobal.m_CAN.door_msg_result = 3;
 					gGlobal.m_Status.UPPERDOOR_ErrCNT ++;
 					if(DEBUG == 1)
 						printf("Warning: Exiting Upperdoor operation, uppermotor_flag = %d, upperlocker_flag = %d\r\n",\
@@ -748,7 +759,7 @@ void DoorEnable_Config(void)
 						|| gGlobal.m_LOCKERLower.err_flag !=0 || gGlobal.m_CAN.operation_mode == 0 )
 				{
 					/* fail to pass the state check for lower door*/
-					gGlobal.m_CAN.door_msg_result = 1;
+					gGlobal.m_CAN.door_msg_result = 3;
 					gGlobal.m_Status.LOWERDOOR_ErrCNT ++;
 					if(DEBUG == 1)
 						printf("Warning: Exiting Lowerdoor operation, uppermotor_flag = %d, upperlocker_flag = %d\r\n",\
@@ -771,12 +782,13 @@ void DoorEnable_Config(void)
 				gGlobal.m_MOTORLower.status = RUNNING;
 			gGlobal.m_stack.doorEndingSuccess = 0;
 			gGlobal.m_stack.operationDoorAcc.realtimeIntCnt =0;
-			gGlobal.m_stack.operationDoorAcc.accTime = 80;
+			gGlobal.m_stack.operationDoorAcc.accTime = 100;
 			gGlobal.m_stack.operationDoorAcc.deaccTime = 200 ;
 			gGlobal.m_stack.operationDoorAcc.accStep = 20 ;
-			gGlobal.m_stack.operationDoorAcc.deaccStep =10 ;
+			gGlobal.m_stack.operationDoorAcc.deaccStep =1 ;
 			gGlobal.m_CAN.door_ready =1;
 			gGlobal.m_stack.operationDUTY = PWM_DUTYFACTOR_0;
+			
 			if(DEBUG ==1)
 				printf("Warning: Singlemode the Lowerdoor starts to open or close!\r\n");
 			gGlobal.m_stack.door_timetostart = gGlobal.m_LocalTime;
@@ -1149,7 +1161,6 @@ void LockerRelease_Config(uint8_t lockerID)
 
 	if (lockerID == 1)
 	{
-		
 		/* release the upperlocker */
 		gGlobal.m_LOCKERUpper.err_flag = 0;
 		UPPERLOCKER_ENABLE;

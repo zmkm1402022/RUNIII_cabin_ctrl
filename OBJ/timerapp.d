@@ -44,3 +44,4 @@
 ..\obj\timerapp.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\timerapp.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\timerapp.o: ..\SYSTEM\delay\delay.h
+..\obj\timerapp.o: ..\HARDWARE\Flash\flash_if.h

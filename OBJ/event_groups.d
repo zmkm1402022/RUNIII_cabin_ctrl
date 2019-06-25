@@ -53,6 +53,7 @@
 ..\obj\event_groups.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\event_groups.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\event_groups.o: ..\SYSTEM\delay\delay.h
+..\obj\event_groups.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\event_groups.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\event_groups.o: ..\FreeRTOS\include\portable.h
 ..\obj\event_groups.o: ..\FreeRTOS\include\deprecated_definitions.h

@@ -53,6 +53,7 @@
 ..\obj\list.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\list.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\list.o: ..\SYSTEM\delay\delay.h
+..\obj\list.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\list.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\list.o: ..\FreeRTOS\include\portable.h
 ..\obj\list.o: ..\FreeRTOS\include\deprecated_definitions.h

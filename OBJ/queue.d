@@ -54,6 +54,7 @@
 ..\obj\queue.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\queue.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\queue.o: ..\SYSTEM\delay\delay.h
+..\obj\queue.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\queue.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\queue.o: ..\FreeRTOS\include\portable.h
 ..\obj\queue.o: ..\FreeRTOS\include\deprecated_definitions.h

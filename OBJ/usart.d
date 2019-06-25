@@ -45,6 +45,7 @@
 ..\obj\usart.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\usart.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\usart.o: ..\SYSTEM\delay\delay.h
+..\obj\usart.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\usart.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 ..\obj\usart.o: ..\FreeRTOS\include\FreeRTOS.h
 ..\obj\usart.o: ..\FreeRTOS\include\FreeRTOSConfig.h

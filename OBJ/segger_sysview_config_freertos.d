@@ -52,6 +52,7 @@
 ..\obj\segger_sysview_config_freertos.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\segger_sysview_config_freertos.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\segger_sysview_config_freertos.o: ..\SYSTEM\delay\delay.h
+..\obj\segger_sysview_config_freertos.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\segger_sysview_config_freertos.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\segger_sysview_config_freertos.o: ..\FreeRTOS\include\portable.h
 ..\obj\segger_sysview_config_freertos.o: ..\FreeRTOS\include\deprecated_definitions.h

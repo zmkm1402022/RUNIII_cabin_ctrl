@@ -53,6 +53,7 @@
 ..\obj\timers.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\timers.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\timers.o: ..\SYSTEM\delay\delay.h
+..\obj\timers.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\timers.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\timers.o: ..\FreeRTOS\include\portable.h
 ..\obj\timers.o: ..\FreeRTOS\include\deprecated_definitions.h

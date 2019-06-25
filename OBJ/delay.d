@@ -44,6 +44,7 @@
 ..\obj\delay.o: ..\SYSTEM\delay\timerapp.h
 ..\obj\delay.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\delay.o: ..\HARDWARE\MotorControl\exDCMotor.h
+..\obj\delay.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\delay.o: ..\FreeRTOS\include\FreeRTOS.h
 ..\obj\delay.o: ..\FreeRTOS\include\FreeRTOSConfig.h
 ..\obj\delay.o: ..\FreeRTOS\SystemView\Src\FreeRTOSV9\SEGGER_SYSVIEW_FreeRTOS.h

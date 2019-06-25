@@ -12,17 +12,17 @@
 #include "exDCMotor.h"
 #include "stm32f10x_tim.h"
 #include "delay.h"
+#include "flash_if.h"
 
 /********************************************************************************************************************************/
 
-#define DEBUG 			0
-//extern EventGroupHandle_t EventGroupHandle; 
 
-#define LOCKER_EVENTBIT (1<<0)
+
+#define LOCKER_EVENTBIT 	(1<<0)
 #define DOOR_EVENTBIT		(1<<1)
 #define LIFTER_EVENTBIT		(1<<2)
-#define FAULTTRIG_EVENTBIT (1<<3)
-#define LED_EVENTBIT   (1<<4)
+#define FAULTTRIG_EVENTBIT 	(1<<3)
+#define LED_EVENTBIT   		(1<<4)
 //define the firmware version as v1.0
 #define 	SYS_SW_VERSION_H8bit          1
 #define 	SYS_SW_VERSION_L8bit          0
@@ -34,10 +34,15 @@
 #define COUNTERCLOCKWISE 								0x12	 // 1) door: CCW = close the door; 2) lifter: CCW = go to the middle level; 3) locker: CCW = lock
 #define IDLE 														0x13
 #define BRAKE														0x14
-#define RUNNING  												0x15
+#define RUNNING  													0x15
 #define ID_01														1
 #define ID_02														2
 #define ID_03														3
+
+
+/* define the threshold value to trigger the protection of upper/lower doors */
+#define THRESHOLD_MIN   300    // 300 mA
+#define THRESHOLD_MAX   700    // 700mA
 
 
 #define BUSVOLTAGE											ADC_Channel_5
@@ -106,6 +111,20 @@
 #define LIFTERMOTOR_OCP_IN								GPIO_ReadInputDataBit(GPIOC,GPIO_Pin_9)		
 #define LOCKERMOTOR_OCP_IN								GPIO_ReadInputDataBit(GPIOB,GPIO_Pin_14)		
 
+
+
+/* LED Function*/
+#define InnerLED_UP_ON										TIM_SetCompare2(TIM8,500)
+#define InnerLED_UP_OFF										TIM_SetCompare2(TIM8,0)
+
+#define InnerLED_DOWN_ON									TIM_SetCompare4(TIM8,500)
+#define InnerLED_DOWN_OFF									TIM_SetCompare4(TIM8,0)
+
+#define OuterLED_LF_ON										TIM_SetCompare3(TIM8,500)
+#define OuterLED_LF_OFF										TIM_SetCompare3(TIM8,0)
+
+#define OuterLED_RT_ON										TIM_SetCompare1(TIM8,500)
+#define OuterLED_RT_OFF										TIM_SetCompare1(TIM8,0)
 /*RESET Function*/
 #define GetValue_NJST_Pin									GPIO_ReadOutputDataBit(GPIOB,GPIO_Pin_6)		
 
@@ -148,13 +167,19 @@
 #define CMD_LED_CTRL								0x2C
 #define CMD_POS_MAINPART						0x03
 
+#define CMD_ADC_CALIBRA							0x31
+#define CMD_HAND_PROT_THRESHOLD			0x32
+#define CAM_DEBUG								0x3C
+
+
 //错误类型
 #define ERR_CMD                         0x8000      //命令不支持
 #define ERR_CMD_DATAERROR								0x8003      // 命令内容不支持
 #define ERR_FORMAT                      0x8001      //格式错误
 #define ERR_OPERATION                   0x8002      //操作错误
 #define ERR_CMD_ERROR_BUSY							0x8004			//同类动作正在执行
-#define ERR_XOR													0x8006
+#define ERR_XOR													0x8006			// xor校验出错
+#define ERR_WRONG_DATA_RANGE						0x8007      
 #define ERR_LENGTH                      0x05      //总长度
 #define ERR_LEN                         0x02      //数据长度
 //其他宏定义
@@ -220,6 +245,7 @@ typedef struct{
 	uint8_t   mode; 
 	uint8_t 	status;  // on/off
 	uint16_t	dutycycle; //
+	uint8_t    blink_enable;  // enable the blinky status of two outer leds
 } LEDPARAM;
 
 typedef struct{
@@ -229,6 +255,8 @@ typedef struct{
 	uint16_t currentCH2;
 	uint16_t currentCH3;
 	uint16_t currentCH4;
+	uint16_t adc_offset[4];
+	uint8_t  cal_enable;
 } CURRENTVECTOR;
 
 
@@ -309,7 +337,8 @@ typedef struct
 	uint32_t 					boradcast_interval;
 	uint16_t					door_interval;
 	uint32_t 					door_timetostart;
-	uint8_t					  doorEndingSuccess;
+	uint16_t					lifter_interval;
+	uint8_t					  	doorEndingSuccess;
 	uint8_t  					lifterEndingSuccess;
 	uint16_t					StepperAccSpeed;
 	uint16_t					StepperAccDeltaAT;
@@ -323,6 +352,18 @@ typedef struct
 	u8								p_broadcastflag;
 } USARTPARAM;
 
+typedef struct
+{
+	u8    t_up_flag;
+	u8    t_down_flag;
+	u8    t_left_flag;
+	u8    t_right_flag;
+	u8    t_up_num;
+	u8    t_down_num;
+	u8    t_left_num;
+	u8    t_right_num;
+
+}	TouchParam;
 
 typedef struct
 {
@@ -346,10 +387,15 @@ typedef struct
 	u8									m_AppDataLen;
 	u8									m_btPWD[UPDATE_PASSWD_LENGTH];
 	ComSet             m_ComSet[MAX_COM_INDEX];
+	u16									m_RebootCnt;  // record the resetting number of system
+	u16									m_UpperDoorThreshold;
+	u16									m_LowerDoorThreshold;
+	u8									m_BackupEnable;
+	TouchParam					m_TouchSignal;
 }GlobalSet;
 
 extern GlobalSet gGlobal;
-
+extern volatile u8 DEBUG;
 
 extern BOOL Check1MSTick(DWORD dwCurTickCount, DWORD dwStart, DWORD DelayTime);
 

@@ -53,6 +53,7 @@
 ..\obj\heap_4.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\heap_4.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\heap_4.o: ..\SYSTEM\delay\delay.h
+..\obj\heap_4.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\heap_4.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\heap_4.o: ..\FreeRTOS\include\portable.h
 ..\obj\heap_4.o: ..\FreeRTOS\include\deprecated_definitions.h

@@ -142,8 +142,8 @@ void TIM1_CC_IRQHandler(void)
             gGlobal.m_stack.operationDUTY  -=gGlobal.m_stack.operationDoorAcc.deaccStep ;
         }
 				
-				if(gGlobal.m_stack.operationDUTY  < 10)
-					gGlobal.m_stack.operationDUTY =10;
+				if(gGlobal.m_stack.operationDUTY  < 200)
+					gGlobal.m_stack.operationDUTY =200;
 				else if(gGlobal.m_stack.operationDUTY > 900)
 					gGlobal.m_stack.operationDUTY = 900;
 //				printf("current dutycycle is %d \r\n",gGlobal.m_stack.operationDUTY);
@@ -164,14 +164,14 @@ void TIM1_CC_IRQHandler(void)
 				{
 					gGlobal.m_MOTORLifter.dutycycle += gGlobal.m_stack.StepperAccDeltaAT;
 					Lifter_Speed_Update(gGlobal.m_MOTORLifter.dutycycle);
-					printf("Phase 1: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
+					//printf("Phase 1: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
 				}
 				else if(gGlobal.m_stack.operationDoorAcc.stepper_pulse_cnt > 45000)
 				{
 					gGlobal.m_MOTORLifter.dutycycle -= gGlobal.m_stack.StepperAccDeltaAT;
 					if(gGlobal.m_MOTORLifter.dutycycle <1000)
 						gGlobal.m_MOTORLifter.dutycycle = 1000;
-					printf("Phase 2: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
+					//printf("Phase 2: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
 					Lifter_Speed_Update(gGlobal.m_MOTORLifter.dutycycle);
 				}
 				
@@ -182,7 +182,7 @@ void TIM1_CC_IRQHandler(void)
 						gGlobal.m_MOTORLifter.dutycycle -= gGlobal.m_stack.StepperAccDeltaAT;
 						if(gGlobal.m_MOTORLifter.dutycycle <1000)
 							gGlobal.m_MOTORLifter.dutycycle = 1000;
-						printf("Phase 2: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
+						//printf("Phase 2: current rpm = %d \r\n",gGlobal.m_MOTORLifter.dutycycle);
 						Lifter_Speed_Update(gGlobal.m_MOTORLifter.dutycycle);						
 					}
 				

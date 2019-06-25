@@ -52,6 +52,7 @@
 ..\obj\croutine.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\croutine.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\croutine.o: ..\SYSTEM\delay\delay.h
+..\obj\croutine.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\croutine.o: ..\FreeRTOS\include\projdefs.h
 ..\obj\croutine.o: ..\FreeRTOS\include\portable.h
 ..\obj\croutine.o: ..\FreeRTOS\include\deprecated_definitions.h

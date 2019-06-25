@@ -255,9 +255,34 @@ void ADCCHANNEL_IRQHandler(void)
     }	
 }
 
+
+/*
+CH1: upper motor channel
+CH2: lifter channel
+CH3: lower motor channel
+CH4: locker channel
+*/
 void FetchingCurrentValue(void)
 {
+
 	gGlobal.m_OCPData.voltbus 	 = 	 (uint16_t) gGlobal.m_OCPData.rawdata[0]*1000/4095*3.3*11;
+	if(gGlobal.m_OCPData.rawdata[1] <= gGlobal.m_OCPData.adc_offset[0])
+		gGlobal.m_OCPData.rawdata[1] =0;
+	else
+		gGlobal.m_OCPData.rawdata[1] -= gGlobal.m_OCPData.adc_offset[0];
+	if(gGlobal.m_OCPData.rawdata[2] <= gGlobal.m_OCPData.adc_offset[1])
+		gGlobal.m_OCPData.rawdata[2] =0;
+	else
+		gGlobal.m_OCPData.rawdata[2] -= gGlobal.m_OCPData.adc_offset[1];	
+	if(gGlobal.m_OCPData.rawdata[3] <= gGlobal.m_OCPData.adc_offset[2])
+		gGlobal.m_OCPData.rawdata[3] =0;
+	else
+		gGlobal.m_OCPData.rawdata[3] -= gGlobal.m_OCPData.adc_offset[2];
+	if(gGlobal.m_OCPData.rawdata[4] <= gGlobal.m_OCPData.adc_offset[3])
+		gGlobal.m_OCPData.rawdata[4] =0;
+	else
+		gGlobal.m_OCPData.rawdata[4] -= gGlobal.m_OCPData.adc_offset[3];
+	
 	gGlobal.m_OCPData.currentCH1 = (uint16_t) gGlobal.m_OCPData.rawdata[1]*11*400/4095; //  Rsens = 0.05 ohm ; Unit: mA    ratio = 3/4
 	gGlobal.m_OCPData.currentCH2 = (uint16_t) gGlobal.m_OCPData.rawdata[2]*11*400/4095;  // Rsens = 0.05 ohm;  Unit: mA  ratio = 3/4
 	gGlobal.m_OCPData.currentCH3 = (uint16_t) gGlobal.m_OCPData.rawdata[3]*11*400/4095;  // Rsens = 0.05 ohm;  Unit: mA  ratio = 3/4

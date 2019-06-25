@@ -44,3 +44,4 @@
 ..\obj\ds18.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\ds18.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\ds18.o: ..\SYSTEM\delay\delay.h
+..\obj\ds18.o: ..\HARDWARE\Flash\flash_if.h

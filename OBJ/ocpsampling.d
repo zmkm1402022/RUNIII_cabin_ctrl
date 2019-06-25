@@ -44,6 +44,7 @@
 ..\obj\ocpsampling.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\ocpsampling.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\ocpsampling.o: ..\SYSTEM\delay\delay.h
+..\obj\ocpsampling.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\ocpsampling.o: ..\FreeRTOS\include\FreeRTOS.h
 ..\obj\ocpsampling.o: ..\FreeRTOS\include\FreeRTOSConfig.h
 ..\obj\ocpsampling.o: ..\FreeRTOS\SystemView\Src\FreeRTOSV9\SEGGER_SYSVIEW_FreeRTOS.h

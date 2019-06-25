@@ -45,4 +45,5 @@
 ..\obj\can.o: ..\HARDWARE\DS18B20\ds18b20.h
 ..\obj\can.o: ..\HARDWARE\MotorControl\exDCMotor.h
 ..\obj\can.o: ..\SYSTEM\delay\delay.h
+..\obj\can.o: ..\HARDWARE\Flash\flash_if.h
 ..\obj\can.o: ..\HARDWARE\CAN\can.h

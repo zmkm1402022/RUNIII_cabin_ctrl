@@ -9,7 +9,7 @@
 #include "event_groups.h"
 u8 cmd;
 u8 USART_rx_buf[150], USART_tx_buf[150];
-
+static u8 tx_buf[5];
 extern SemaphoreHandle_t BinarySemaphore_USART;
 extern EventGroupHandle_t EventGroupHandle; 
 void USART1_DMA_Config(void);
@@ -215,7 +215,11 @@ void AppOperationRes(u8 rcmd)
     BYTEToPack(SendPack,CalcXORSum(&SendPack.m_pBuffer[2], SendPack.m_Pos-2));//校验字节 前面有一个包头0xAA 0x55字节不作为检验对象
     SendUp(&SendPack);
 }
-/* operation result feedback */
+/* operation result feedback 
+[input] result: 0 = ignore this byte, xx = operation result
+[input] err: array for sending datas
+[input] cnt: 0 = ignore the Data section
+*/
 void AppResultRes(u8 rcmd, u8 result, u8 err[], u8 cnt)
 {
 	All_PACK SendPack;
@@ -223,14 +227,36 @@ void AppResultRes(u8 rcmd, u8 result, u8 err[], u8 cnt)
 	//后面是应答数据
 	InitPack(SendPack);//初始化
 	PUSHPackTagHeader(SendPack);//包头字节0xAA 0x55压栈
-	BYTEToPack(SendPack,cnt+4);//总长度压栈 Length
+	
+	if(result !=0){
+		BYTEToPack(SendPack,cnt+4);//总长度压栈 Length
+	}
+	else {
+		BYTEToPack(SendPack,cnt+3);//总长度压栈 Length
+	}
+	
+	
+	
 	BYTEToPack(SendPack,CMD_BAG_FLAG_RESULT);//Flag字节
-	BYTEToPack(SendPack,cnt+1);//数据长度字节 Len
+	
+	if(result >0){
+		BYTEToPack(SendPack,cnt+1);//数据长度字节 Len
+	}
+	else{
+		BYTEToPack(SendPack,cnt);
+	}
+	
 	BYTEToPack(SendPack,rcmd);//cmd
-	if(result != 0)
+	
+	if(result > 0){
 		BYTEToPack(SendPack,result);
-	for(i=0; i<cnt; i++)
-		BYTEToPack(SendPack,err[i]);
+	}
+	if(cnt != 0)
+	{
+		for(i=0; i<cnt; i++){
+			BYTEToPack(SendPack,err[i]);	
+		}
+	}
 	BYTEToPack(SendPack,CalcXORSum(&SendPack.m_pBuffer[2], SendPack.m_Pos-2));//校验字节 前面有一个包头0xAA 0x55字节不作为检验对象
 	SendUp(&SendPack);
 }
@@ -365,13 +391,56 @@ u8 positioncheck(u8 pos_1, u8 pos_2)
 		return 3;
 }
 
+void AppHandProtection(u8 * vault)
+{
+	u16 data[2];
+	if(gGlobal.m_AppDataLen != 4)
+	{
+			SendErrCode(ERR_FORMAT, CMD_ADC_CALIBRA);
+			return;
+	}
+	data[0] = vault[0]|(vault[1]<<8);
+	data[1] = vault[2]|(vault[3]<<8);
+	if(data[0]<THRESHOLD_MIN || data[1]<THRESHOLD_MIN)
+	{
+		SendErrCode(ERR_WRONG_DATA_RANGE, CMD_ADC_CALIBRA);
+		return;
+	}
+	else if(data[0]>THRESHOLD_MAX || data[1]>THRESHOLD_MAX)
+	{
+		SendErrCode(ERR_WRONG_DATA_RANGE, CMD_ADC_CALIBRA);
+		return;	
+	}
+	else
+	{
+		gGlobal.m_UpperDoorThreshold = data[0];
+		gGlobal.m_LowerDoorThreshold = data[1];
+		AppResultRes(CMD_ADC_CALIBRA, 0 , tx_buf, 0);
+	}
+}
+
+void AppAdcCalibration(void)
+{
+	if(gGlobal.m_AppDataLen != 0)
+	{
+			SendErrCode(ERR_FORMAT, CMD_ADC_CALIBRA);
+			return;
+	}
+	UPPERMOTORBRAKE;
+	LOWERMOTORBRAKE;
+	LOCKERSTANDBY;
+	delay_xms(1000);	
+	gGlobal.m_OCPData.cal_enable = 1;
+	AppResultRes(CMD_ADC_CALIBRA, 0 , tx_buf, 0);
+}
+
 
 /*
 return the current position of doors/lockers/ lifter
 */
 void AppPosCheck(void )
 {
-	static u8 tx_buf[5];
+	
 	u8 posL, posR;
 	if(gGlobal.m_AppDataLen != 0)
 	{
@@ -636,6 +705,10 @@ void ProcessUpCmd(All_PACK *pack)
 				AppStartUpdata(pack);
 				break;	
 
+		case CAM_DEBUG:
+				DEBUG = Data[0];
+		break;
+
 		case CMD_LOCKER_UPPERLOWER:
 				if (gGlobal.m_CAN.locker_ready == RESET && gGlobal.m_CAN.door_ready == RESET)
 					AppLocker( Data[0], CMD_LOCKER_UPPERLOWER);
@@ -667,6 +740,14 @@ void ProcessUpCmd(All_PACK *pack)
 		
 		case CMD_POS_MAINPART:
 			AppPosCheck();
+		break;
+		
+		case CMD_ADC_CALIBRA:
+			AppAdcCalibration();
+		break;
+		
+		case CMD_HAND_PROT_THRESHOLD:
+			AppHandProtection(Data);
 		break;
 			
 		default:
